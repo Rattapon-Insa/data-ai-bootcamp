@@ -1,198 +1,573 @@
 ## Data Exploration with BigQuery
 
-1. How much are we selling monthly? Is it high or low compared to last month?
+### User
+1. Summarize total user by traffice_source, gender and city
 ```
-SELECT
-  EXTRACT(MONTH FROM oi.Created_at) AS months,
-  ROUND(SUM(oi.sale_price * o.num_of_item), 2) AS revenue,
-  COUNT(DISTINCT oi.order_id) AS order_count,
-  COUNT(DISTINCT oi.user_id) AS customers_purchased
-FROM bigquery-public-data.thelook_ecommerce.order_items oi
-INNER JOIN `bigquery-public-data.thelook_ecommerce.orders` AS o 
-ON oi.order_id = o.order_id
-WHERE oi.status NOT IN ('Cancelled', 'Returned')
-GROUP BY months
-ORDER BY revenue DESC;
-```
-
-2. Who are our customers? Which country do we have major customers coming from? 
-Which Gender and Age group brought in the most profit?
-2.1 Customers by Country
-```
-WITH customers AS (
+WITH CTE AS (
   SELECT
-    DISTINCT oi.user_id,
-    SUM(CASE WHEN u.gender = 'M' THEN 1 ELSE null END) AS male,
-    SUM(CASE WHEN u.gender = 'F' THEN 1 ELSE null END) AS female,
-    u.country AS country
-    FROM bigquery-public-data.thelook_ecommerce.order_items AS oi
-    INNER JOIN bigquery-public-data.thelook_ecommerce.users AS u
-    ON oi.user_id = u.id
-    WHERE oi.status not in ('Cancelled', 'Returned')
-    GROUP BY user_id, country
-    )
-
+  events.id,
+  events.user_id,
+  events.sequence_number,
+  events.session_id,
+  events.created_at,
+  events.ip_address,
+  events.state,
+  events.postal_code,
+  events.browser,
+  events.uri,
+  events.event_type,
+  users.id,
+  users.first_name,
+  users.last_name,
+  users.email,
+  users.age,
+  users.gender,
+  users.state,
+  users.street_address,
+  users.postal_code,
+  users.city,
+  users.country,
+  users.latitude,
+  users.longitude,
+  users.traffic_source,
+  users.created_at,
+  users.user_geom
+FROM
+  `bigquery-public-data.thelook_ecommerce.events` AS events
+INNER JOIN
+  `bigquery-public-data.thelook_ecommerce.users` AS users
+ON
+  events.user_id = users.id
+)
 SELECT
-  country,
-  COUNT(DISTINCT user_id) AS customers_count,
-  COUNT(female) AS female,
-  COUNT(male) AS male
-FROM customers
-GROUP BY country
-ORDER BY customers_count DESC;
+  traffic_source,
+  gender,
+  city,
+  COUNT(user_id) AS total_users
+FROM
+  CTE
+GROUP BY
+  1,
+  2,
+  3;
 ```
 
-2.2. Customers by Gender
-```
-SELECT 
-  o.gender,
-  ROUND(SUM(oi.sale_price * o.num_of_item), 2) AS revenue,
-  SUM(o.num_of_item) AS quantity
-FROM bigquery-public-data.thelook_ecommerce.order_items AS oi
-INNER JOIN bigquery-public-data.thelook_ecommerce.orders AS o
-ON oi.user_id = o.user_id
-WHERE oi.status NOT IN ('Cancelled', 'Returned')
-GROUP BY gender
-ORDER BY revenue DESC;
-```
-
-2.3. Customers by Age Group
+### Product
+2. Top 10 Average, min, max profit from each category
 ```
 SELECT
+  category,
+  AVG(retail_price - cost) AS avg_profit,
+  MIN(retail_price - cost) AS min_profit,
+  MAX(retail_price - cost) AS max_profit
+FROM
+  `bigquery-public-data.thelook_ecommerce.products`
+GROUP BY
+  1
+ORDER BY
+  avg_profit DESC
+LIMIT
+  10;
+```
+
+### Order
+3.1 For Shipped Orders, find average, min, max, lead time in hour before Shipped. Check status need to be 'Shipped' and lead time are higher than 0
+
+```
+SELECT
+  AVG(EXTRACT(HOUR
+    FROM (shipped_at - created_at))) AS avg_lead_time_hours,
+  MIN(EXTRACT(HOUR
+    FROM (shipped_at - created_at))) AS min_lead_time_hours,
+  MAX(EXTRACT(HOUR
+    FROM (shipped_at - created_at))) AS max_lead_time_hours
+FROM
+  `bigquery-public-data.thelook_ecommerce.order_items`
+WHERE
+  status = 'Shipped'
+  AND EXTRACT(HOUR
+  FROM (shipped_at - created_at)) > 0;
+```
+
+3.2 For each month, find total_revenue, total_items, total_purchasers, total_orders where the order not Cancelled or Returned. Please sort the result with month. Also noted that total revenue retail price multiply with num_of_item
+
+```
+SELECT
+  EXTRACT(MONTH
+  FROM
+    order_items.created_at) AS month,
+  SUM(order_items.sale_price * order_items.id) AS total_revenue,
+  COUNT(order_items.id) AS total_items,
+  COUNT(DISTINCT order_items.user_id) AS total_purchasers,
+  COUNT(DISTINCT order_items.order_id) AS total_orders
+FROM
+  `bigquery-public-data.thelook_ecommerce.order_items` AS order_items
+WHERE
+  order_items.status != 'Cancelled'
+  AND order_items.status != 'Returned'
+GROUP BY
+  1
+ORDER BY
+  1;
+```
+
+3.3 For all order, find ratio of each order status per total order
+```
+SELECT
+  orders.status,
+  COUNT(orders.order_id) / (
+  SELECT
+    COUNT(*)
+  FROM
+    `bigquery-public-data.thelook_ecommerce.orders` AS orders ) AS ratio
+FROM
+  `bigquery-public-data.thelook_ecommerce.orders` AS orders
+GROUP BY
+  1;
+```
+
+3.4 Find Cancelled rate based on gender
+```
+SELECT
+  orders.gender,
+  SUM(CASE
+      WHEN orders.status = 'Cancelled' THEN 1
+      ELSE 0
+  END
+    ) / COUNT(orders.order_id) AS cancelled_rate
+FROM
+  `bigquery-public-data.thelook_ecommerce.orders` AS orders
+GROUP BY
+  1;
+```
+
+### Event
+
+4.1 สรุปจำนวน event จาก trafic source , ทุก event_type, browser
+```
+SELECT
+  traffic_source,
+  event_type,
+  browser,
+  COUNT(*) AS total_event
+FROM
+  `bigquery-public-data.thelook_ecommerce.events`
+GROUP BY
+  traffic_source,
+  event_type,
+  browser;
+```
+
+4.2 count unique total users group by trafic source , country where user id is not empty
+```
+SELECT
+  events.traffic_source,
+  events.city,
+  COUNT(DISTINCT events.user_id)
+FROM
+  `bigquery-public-data.thelook_ecommerce.events` AS events
+WHERE
+  events.user_id IS NOT NULL
+GROUP BY
+  1,
+  2;
+```
+
+### Distribution Centers
+
+5 Summary product category in each DC name
+```
+WITH
+  CTE AS (
+  SELECT
+    products.id,
+    products.cost,
+    products.category,
+    products.name,
+    products.brand,
+    products.retail_price,
+    products.department,
+    products.sku,
+    distribution_centers.id,
+    distribution_centers.name AS distribution_centers_name,
+    distribution_centers.latitude,
+    distribution_centers.longitude,
+    distribution_centers.distribution_center_geom
+  FROM
+    `bigquery-public-data.thelook_ecommerce.products` AS products
+  INNER JOIN
+    `bigquery-public-data.thelook_ecommerce.distribution_centers` AS distribution_centers
+  ON
+    products.distribution_center_id = distribution_centers.id )
+SELECT
+  t1.distribution_centers_name AS name,
+  t1.category
+FROM
+  CTE AS t1
+GROUP BY
+  1,
+  2;
+```
+
+### Order Items and Product
+
+6.1 Total sale volume by category where order status is Cancelled or Returned. sort by highest total_sale_volume
+```
+WITH CTE AS (
+  SELECT
+  products.id,
+  products.cost,
+  products.category,
+  products.name,
+  products.brand,
+  products.retail_price,
+  products.department,
+  products.sku,
+  products.distribution_center_id,
+  order_items.id,
+  order_items.order_id,
+  order_items.user_id,
+  order_items.product_id,
+  order_items.inventory_item_id,
+  order_items.status,
+  order_items.created_at,
+  order_items.shipped_at,
+  order_items.delivered_at,
+  order_items.returned_at,
+  order_items.sale_price
+FROM
+  `bigquery-public-data.thelook_ecommerce.products` AS products
+INNER JOIN
+  `bigquery-public-data.thelook_ecommerce.order_items` AS order_items
+ON
+  products.id = order_items.product_id
+)
+SELECT
+  category,
+  SUM(sale_price) AS total_sale_volume
+FROM
+  CTE AS t1
+WHERE
+  t1.status = 'Cancelled'
+  OR t1.status = 'Returned'
+GROUP BY
+  1
+ORDER BY
+  total_sale_volume DESC;
+```
+
+6.2 product sales
+
+```
+WITH CTE AS (
+  SELECT
+  products.id,
+  products.cost,
+  products.category,
+  products.name,
+  products.brand,
+  products.retail_price,
+  products.department,
+  products.sku,
+  products.distribution_center_id,
+  order_items.id,
+  order_items.order_id,
+  order_items.user_id,
+  order_items.product_id,
+  order_items.inventory_item_id,
+  order_items.status,
+  order_items.created_at,
+  order_items.shipped_at,
+  order_items.delivered_at,
+  order_items.returned_at,
+  order_items.sale_price
+FROM
+  `bigquery-public-data.thelook_ecommerce.products` AS products
+INNER JOIN
+  `bigquery-public-data.thelook_ecommerce.order_items` AS order_items
+ON
+  products.id = order_items.product_id
+)
+SELECT
+  t1.category,
+  SUM(t1.sale_price) AS total_sales
+FROM
+  CTE AS t1
+GROUP BY
+  1;
+```
+
+6.3 brand total sale volume
+```
+WITH CTE AS (
+  SELECT
+  products.id,
+  products.cost,
+  products.category,
+  products.name,
+  products.brand,
+  products.retail_price,
+  products.department,
+  products.sku,
+  products.distribution_center_id,
+  order_items.id,
+  order_items.order_id,
+  order_items.user_id,
+  order_items.product_id,
+  order_items.inventory_item_id,
+  order_items.status,
+  order_items.created_at,
+  order_items.shipped_at,
+  order_items.delivered_at,
+  order_items.returned_at,
+  order_items.sale_price
+FROM
+  `bigquery-public-data.thelook_ecommerce.products` AS products
+INNER JOIN
+  `bigquery-public-data.thelook_ecommerce.order_items` AS order_items
+ON
+  products.id = order_items.product_id
+)
+SELECT
+  t1.brand,
+  SUM(t1.sale_price) AS total_sales
+FROM
+  CTE AS t1
+GROUP BY
+  1;
+```
+
+6.4 Analyze which product category have order sale volume and frequency
+```
+WITH CTE AS (
+  SELECT
+  products.id,
+  products.cost,
+  products.category,
+  products.name,
+  products.brand,
+  products.retail_price,
+  products.department,
+  products.sku,
+  products.distribution_center_id,
+  order_items.id,
+  order_items.order_id,
+  order_items.user_id,
+  order_items.product_id,
+  order_items.inventory_item_id,
+  order_items.status,
+  order_items.created_at,
+  order_items.shipped_at,
+  order_items.delivered_at,
+  order_items.returned_at,
+  order_items.sale_price
+FROM
+  `bigquery-public-data.thelook_ecommerce.products` AS products
+INNER JOIN
+  `bigquery-public-data.thelook_ecommerce.order_items` AS order_items
+ON
+  products.id = order_items.product_id
+)
+SELECT
+  category,
+  COUNT(DISTINCT order_id) AS order_count,
+  SUM(sale_price) AS total_sale_volume
+FROM
+  CTE
+GROUP BY
+  1
+ORDER BY
+  order_count DESC;
+```
+
+### BigQuery ML
+
+7.1 Train a boosted tree classifier model in BigQuery to predict product categories based on age, gender, city, country, and traffic source by creating a model with CREATE OR REPLACE MODEL, specifying the target column as category, splitting data randomly with 20% for evaluation, and selecting relevant features from the dataset while ensuring data types are consistent.
+
+```
+CREATE OR REPLACE MODEL
+  `airflow-demo-437509._b9e0c16f3d4adbfc14369851e36362f2e91e8a7a.boosted_tree_model` OPTIONS ( model_type = 'BOOSTED_TREE_CLASSIFIER',
+    data_split_method = 'RANDOM',
+    data_split_eval_fraction = 0.2,
+    input_label_cols = ['category'],
+    max_iterations = 100) AS
+SELECT
+  CAST(age AS FLOAT64) AS age,
   CASE
-    WHEN u.age < 12 THEN 'Kids'
-    WHEN u.age BETWEEN 12 AND 20 THEN 'Teenagers'
-    WHEN u.age BETWEEN 20 AND 30 THEN 'Young Adults'
-    WHEN u.age BETWEEN 30 AND 50 THEN 'Adults'
-    WHEN u.age > 50 THEN 'Elderly'
-    END AS age_group,
-  COUNT(DISTINCT oi.user_id) AS total_customer
-FROM bigquery-public-data.thelook_ecommerce.order_items AS oi
-INNER JOIN bigquery-public-data.thelook_ecommerce.users AS u
-ON oi.user_id = u.id
-GROUP BY age_group
-ORDER BY total_customer DESC;
+    WHEN gender = 'F' THEN 1
+    ELSE 0
+END
+  AS gender,
+  city,
+  country,
+  traffic_source,
+  category
+FROM (
+  SELECT
+    status,
+    shipped_at,
+    delivered_at,
+    returned_at,
+    sale_price,
+    cost,
+    category,
+    name,
+    brand,
+    retail_price,
+    department,
+    sku,
+    first_name,
+    last_name,
+    email,
+    age,
+    gender,
+    state,
+    street_address,
+    postal_code,
+    city,
+    country,
+    latitude,
+    longitude,
+    traffic_source
+  FROM
+    `bigquery-public-data.thelook_ecommerce.order_items` AS order_items
+  INNER JOIN
+    `bigquery-public-data.thelook_ecommerce.products` AS products
+  ON
+    order_items.product_id = products.id
+  INNER JOIN
+    `bigquery-public-data.thelook_ecommerce.users` AS users
+  ON
+    order_items.user_id = users.id
+  WHERE
+    status = 'Shipped' );
 ```
 
-3. What brands and product categories are we selling more and the least? What are we making money on?
-
-3.1 Brand sales
+7.2 Evaluate Model Performance
 ```
-SELECT 
-  p.brand AS brand,
-  ROUND(SUM(sale_price * num_of_item), 2) AS revenue,
-  SUM(num_of_item) AS quantity
-FROM bigquery-public-data.thelook_ecommerce.order_items oi
-INNER JOIN bigquery-public-data.thelook_ecommerce.orders o
-ON oi.order_id = o.order_id
-INNER JOIN bigquery-public-data.thelook_ecommerce.products p
-ON oi.product_id = p.id
-WHERE oi.status NOT IN ('Cancelled', 'Returned')
-GROUP BY brand
-ORDER BY revenue DESC;
-```
-3.2 Product category sales
-```
+WITH CTE AS (
 SELECT
-  category AS product_category,
-  ROUND(SUM(sale_price * num_of_item), 2) AS revenue,
-  SUM(num_of_item) AS quantity
-FROM bigquery-public-data.thelook_ecommerce.order_items oi
-INNER JOIN bigquery-public-data.thelook_ecommerce.orders o
-ON oi.order_id = o.order_id
-INNER JOIN bigquery-public-data.thelook_ecommerce.products p
-ON oi.product_id = p.id
-WHERE oi.status NOT IN ('cancelled', 'Returned')
-GROUP BY category
-ORDER BY revenue DESC;
-```
+  status,
+  shipped_at,
+  delivered_at,
+  returned_at,
+  sale_price,
+  cost,
+  category,
+  name,
+  brand,
+  retail_price,
+  department,
+  sku,
+  first_name,
+  last_name,
+  email,
+  age,
+  gender,
+  state,
+  street_address,
+  postal_code,
+  city,
+  country,
+  latitude,
+  longitude,
+  traffic_source
+  FROM
+  `bigquery-public-data.thelook_ecommerce.order_items` AS order_items
+INNER JOIN
+  `bigquery-public-data.thelook_ecommerce.products` AS products
+ON
+  order_items.product_id = products.id
+INNER JOIN
+  `bigquery-public-data.thelook_ecommerce.users` AS users
+ON
+  order_items.user_id = users.id
+WHERE
+  status = 'Shipped'
+)
 
-
-4. What are the most canceled and returned brands and product categories?
-
-4.1 Brand cancellation and return
-```
 SELECT
-  p.brand AS brand,
-  SUM(CASE WHEN oi.status = 'Cancelled' THEN 1 ELSE null END) AS Cancelled,
-  SUM(CASE WHEN oi.status = 'Returned' THEN 1 ELSE null END) AS Returned
-FROM bigquery-public-data.thelook_ecommerce.order_items oi
-INNER JOIN bigquery-public-data.thelook_ecommerce.products p
-ON oi.product_id = p.id
-GROUP BY brand
-ORDER BY Cancelled DESC;
---ORDER BY Returned DESC;
+  *
+FROM
+  ML.EVALUATE(
+    MODEL `airflow-demo-437509._b9e0c16f3d4adbfc14369851e36362f2e91e8a7a.boosted_tree_model`,
+    (
+      SELECT
+        CAST(age AS FLOAT64) AS age,
+        CASE WHEN gender = 'F' THEN 1 ELSE 0 END AS gender,
+        city,
+        country,
+        traffic_source,
+        category
+      FROM
+        CTE
+      WHERE
+        category IS NOT NULL
+    )
+  );
 ```
 
-4.2 Product category cancellation and return
-```
-SELECT p.category AS Category,
-  SUM(CASE WHEN oi.status = 'Cancelled' THEN 1 ELSE null END) AS Cancelled,
-  SUM(CASE WHEN oi.status = 'Returned' THEN 1 ELSE null END) AS Returned
-FROM bigquery-public-data.thelook_ecommerce.order_items oi
-INNER JOIN bigquery-public-data.thelook_ecommerce.products p
-ON oi.product_id = p.id
-GROUP BY Category
-ORDER by Cancelled DESC
---ORDER by Returned DESC;
-```
-
-5. What marketing channel are we doing well on?
+7.3 Inference Query for Boosted Tree Model
 
 ```
-SELECT 
-  u.traffic_source AS traffic_source,
-  COUNT(DISTINCT oi.user_id) AS total_customers
-FROM bigquery-public-data.thelook_ecommerce.order_items oi
-INNER JOIN bigquery-public-data.thelook_ecommerce.users u
-ON oi.user_id = u.id
-WHERE oi.status NOT IN ('Cancelled', 'Returned')
-GROUP BY traffic_source
-ORDER BY total_customers DESC;
-
-```
-
-6. We will provide promotions during Chinese New Year celebrations for female customers in China via email.
-
-```
-
-SELECT 
-  id,
-  email
-FROM `bigquery-public-data.thelook_ecommerce.users` 
-WHERE gender = 'F' AND country = 'China'
-ORDER BY id;
-```
-
-7. Provide a list of 10 customer IDs and emails with the largest total overall purchase. We will give a discount for Campaign 12.12!
-
-
-```
+WITH CTE AS (
 SELECT
-  u.id AS customer_id,
-  u.email AS  email,
-  ROUND(SUM(oi.sale_price * o.num_of_item), 2) AS total_purchase
-FROM bigquery-public-data.thelook_ecommerce.order_items AS oi
-INNER JOIN bigquery-public-data.thelook_ecommerce.orders AS o
-ON oi.order_id = o.order_id
-INNER JOIN bigquery-public-data.thelook_ecommerce.users AS u
-ON o.user_id = u.id
-GROUP BY customer_id, email
-ORDER BY total_purchase DESC
-LIMIT 10;
-```
+  status,
+  shipped_at,
+  delivered_at,
+  returned_at,
+  sale_price,
+  cost,
+  category,
+  name,
+  brand,
+  retail_price,
+  department,
+  sku,
+  first_name,
+  last_name,
+  email,
+  age,
+  gender,
+  state,
+  street_address,
+  postal_code,
+  city,
+  country,
+  latitude,
+  longitude,
+  traffic_source
+  FROM
+  `bigquery-public-data.thelook_ecommerce.order_items` AS order_items
+INNER JOIN
+  `bigquery-public-data.thelook_ecommerce.products` AS products
+ON
+  order_items.product_id = products.id
+INNER JOIN
+  `bigquery-public-data.thelook_ecommerce.users` AS users
+ON
+  order_items.user_id = users.id
+WHERE
+  status = 'Shipped'
+)
 
-8. Create a query to get frequencies, average order value, and the total number of unique users where status is completed grouped by month
-
-```
-
-SELECT 
-  FORMAT_DATE("%Y-%m", created_at) AS month_year,
-  ROUND((COUNT(DISTINCT order_id)/COUNT(DISTINCT user_id)),2) AS frequencies,
-  ROUND((SUM(sale_price)/COUNT(DISTINCT order_id)),2) AS Average_order_value,
-  COUNT(DISTINCT user_id) AS total_unique_users
-FROM `bigquery-public-data.thelook_ecommerce.order_items`
-WHERE status = 'Complete'
-GROUP BY month_year
-ORDER BY month_year DESC;
+SELECT
+  *
+FROM
+  ML.EVALUATE(
+    MODEL `airflow-demo-437509._b9e0c16f3d4adbfc14369851e36362f2e91e8a7a.boosted_tree_model`,
+    (
+      SELECT
+        CAST(age AS FLOAT64) AS age,
+        CASE WHEN gender = 'F' THEN 1 ELSE 0 END AS gender,
+        city,
+        country,
+        traffic_source,
+        category
+      FROM
+        CTE
+      WHERE
+        category IS NOT NULL
+    )
+  );
 ```

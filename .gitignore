@@ -172,3 +172,4 @@ backup
 
 #LINE
 *line_secret.yml
+*vertex_ai_secret.yml

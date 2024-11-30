@@ -5,7 +5,9 @@
 ใช้คำสั่งด้านล่างเพื่อคัดลอกไฟล์นี้ไปยังโฟลเดอร์ที่ Airflow ใช้สำหรับจัดการ DAG:
 
 ```bash
-cp coingecko_api_with_line_notify.py /path/to/your/airflow/dags/
+cp 21_coingecko_api_with_line_notify.py 04-data-pipeline-with-apache-airflow/dags/
+cp 22_bigquery_data_notify_dag.py 04-data-pipeline-with-apache-airflow/dags/
+
 ```
 
 ---
@@ -25,6 +27,8 @@ Airflow DAG นี้ต้องใช้ **Variables** สำหรับก�
 | `CHANNEL_ACCESS_TOKEN` | ใส่ LINE Channel Access Token ของคุณ       |
 | `LINE_USER_ID`       | ใส่ LINE User ID ที่ต้องการส่งข้อความถึง |
 
+![alt text](../assets/25-10-config-search-agent-gemini-seach-with-answer.png)
+
 ### หรือเพิ่ม Variables ผ่านคำสั่ง CLI
 
 ใช้คำสั่งนี้ใน CLI เพื่อเพิ่มค่า Variables:
@@ -40,3 +44,8 @@ airflow variables set LINE_USER_ID <YOUR_LINE_USER_ID>
 
 1. เปิดใช้งาน DAG ผ่าน Airflow UI
 2. กดปุ่ม "Trigger DAG" เพื่อเริ่มการทำงานของ DAG
+
+## 4. ผลการรัน
+
+![alt text](../assets/22-result-1.png) 
+![alt text](../assets/22-result-2.png)

@@ -1,110 +1,65 @@
+import json
+import logging
+
+import pendulum
+import requests
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.providers.google.cloud.transfers.gcs_to_bigquery import GCSToBigQueryOperator
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
-import requests
-import json
-from datetime import datetime, timedelta
+from airflow.providers.google.cloud.transfers.gcs_to_bigquery import (
+    GCSToBigQueryOperator,
+)
 
-# Define default arguments for the DAG
-default_args = {
-    'owner': 'gemini-code-assist',
-    'retries': 2,
-    'retry_delay': timedelta(minutes=5),
-}
-# PROMPT: Write Document for this pipeline as a DagDoc 
-__doc__ = """
-This DAG collects cryptocurrency price data from the CoinGecko API and loads it into a BigQuery table.
+log = logging.getLogger(__name__)
 
-**Schedule:**
+# REPLACE_BUCKET_NAME_HERE !!!
+BUCKET_NAME = "deb-gemini-code-assist-data-ai-tao-001"
 
-The DAG runs every Monday, Wednesday, and Friday at midnight.
+# REPLACE_DESTINATION_PROJECT_DATASET_TABLE_HERE !!!
+DESTINATION_PROJECT_DATASET_TABLE = "dataai_tao_34.coingecko_price"
 
-**Tasks:**
-
-1. **collect_coingecko_data:**
-    - Fetches price data for Bitcoin, Ethereum, and Tether in USD and THB.
-    - Includes market cap, 24-hour volume, 24-hour change, and last updated timestamp.
-    - Converts the timestamp to a datetime object.
-    - Uploads the data as a JSON file to Google Cloud Storage (GCS).
-
-2. **load_to_bigquery:**
-    - Loads the JSON data from GCS into a BigQuery table.
-    - Appends new data to the existing table.
-    - Creates the table if it doesn't exist.
-
-**Dependencies:**
-
-- `collect_coingecko_data` runs before `load_to_bigquery`.
-
-**Configuration:**
-
-- Replace `data-ai-beat-1991` with your actual GCS bucket name.
-- Ensure that the BigQuery table `gemini_assist_workshop.coingecko_price` exists or is created.
-
-**Notes:**
-
-- The CoinGecko API has rate limits. Ensure you don't exceed these limits.
-- The `schedule_interval` can be adjusted to suit your needs.
-- The `write_disposition` can be changed to `WRITE_TRUNCATE` if you want to overwrite the table with new data.
-"""
-
-# Define the DAG
 with DAG(
-    'coingecko_api_to_bigquery',
-    default_args=default_args,
-    description='Collect data from CoinGecko API and load to BigQuery',
-    schedule_interval='0 0 * * 1,3,5',  # Run every Monday, Wednesday, and Friday at 00:00 (midnight)
-    start_date=datetime(2023, 12, 18),
+    dag_id="coingecko_data_pipeline",
+    schedule="@hourly",
+    start_date=pendulum.datetime(2024, 11, 30, tz="UTC"),
     catchup=False,
-    doc_md = __doc__
+    tags=["coingecko", "api", "bigquery"],
 ) as dag:
-
-    # Task 1: Collect data from CoinGecko API
-    def collect_coingecko_data(**kwargs):
-        api_url = 'https://api.coingecko.com/api/v3/simple/price'
-        params = {
-            'ids': 'bitcoin,ethereum,tether',
-            'vs_currencies': 'usd,thb',
-            'include_market_cap': 'true',
-            'include_24hr_vol': 'true',
-            'include_24hr_change': 'true',
-            'include_last_updated_at': 'true',
-        }
-
-        response = requests.get(api_url, params=params)
+    def _extract_data_from_api(**kwargs):
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether&vs_currencies=usd,thb&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true"
+        response = requests.get(url)
         data = response.json()
 
-        # Convert timestamp to datetime object
-        for coin, values in data.items():
-            data[coin]['last_updated_at'] = datetime.fromtimestamp(values['last_updated_at']).isoformat()
+        execution_date = kwargs['execution_date']
+        filename = f"coingecko_price_{execution_date.format('YYYYMMDD')}.json"
+        bucket_name = BUCKET_NAME
+        folder_name = "raw/coingecko"
 
-        # Upload JSON data to GCS
-        bucket_name = kwargs['bucket_name']
-        gcs_folder = 'raw/coingecko'
+
         gcs_hook = GCSHook()
+
         gcs_hook.upload(
             bucket_name=bucket_name,
-            object_name=f'{gcs_folder}/coingecko_data_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json',
+            object_name=f"{folder_name}/{filename}", # Construct full path
             data=json.dumps(data),
         )
 
-    collect_data_task = PythonOperator(
-        task_id='collect_coingecko_data',
-        python_callable=collect_coingecko_data,
-        op_kwargs={'bucket_name': 'data-ai-beat-1991'},  # Replace with your bucket name
+
+    extract_data_task = PythonOperator(
+        task_id="extract_data_from_api",
+        python_callable=_extract_data_from_api,
+        provide_context=True, 
     )
 
-    # Task 2: Load data from GCS to BigQuery
-    load_to_bq_task = GCSToBigQueryOperator(
-        task_id='load_to_bigquery',
-        bucket='data-ai-beat-1991',  # Replace with your bucket name
-        source_objects=['raw/coingecko/*.json'],  # Load all JSON files in the folder
-        destination_project_dataset_table='gemini_assist_workshop.coingecko_price',
-        write_disposition='WRITE_APPEND',  # Append data to the table
+    load_data_to_bigquery_task = GCSToBigQueryOperator(
+        task_id="load_data_to_bigquery",
+        bucket="deb-gemini-code-assist-data-ai-tao-001",
+        source_objects=["raw/coingecko/coingecko_price_*.json"], # Wildcard path
         source_format='NEWLINE_DELIMITED_JSON',
-        create_disposition='CREATE_IF_NEEDED',  # Create the table if it doesn't exist
+        destination_project_dataset_table=DESTINATION_PROJECT_DATASET_TABLE,
+        create_disposition="CREATE_IF_NEEDED",
+        write_disposition="WRITE_APPEND",
+        schema_update_options=["ALLOW_FIELD_ADDITION"],
     )
 
-    # Set task dependencies
-    collect_data_task >> load_to_bq_task
+    extract_data_task >> load_data_to_bigquery_task

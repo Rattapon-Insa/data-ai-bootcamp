@@ -39,7 +39,7 @@ Prompts:
 | Query Prompt | Visualization Prompts |
 | - | - |
 | Analyze which product category have order sale volume and frequency | - |
-| product category sales| - |
+| brand total sale volume| - |
 | Total sale volume by category where order status is Cancelled or Returned. sort by highest total sale volume | - |
 
 

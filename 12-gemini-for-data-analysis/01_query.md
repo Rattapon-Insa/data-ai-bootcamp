@@ -507,6 +507,19 @@ FROM
   );
 ```
 
+Key Evaluation Metrics:
+
+Accuracy: The proportion of correctly predicted instances among all instances. It reflects the overall effectiveness of the model but may be misleading in imbalanced datasets.
+
+Precision: The ratio of true positive predictions to the total predicted positives. It indicates the model's ability to avoid false positives.
+
+Recall (Sensitivity): The ratio of true positive predictions to all actual positives. It measures the model's capability to identify all relevant instances.
+
+F1 Score: The harmonic mean of precision and recall. It provides a balance between precision and recall, especially useful when dealing with uneven class distributions.
+
+Log Loss: Evaluates the uncertainty of predictions by comparing the predicted probabilities against the actual class labels. Lower values indicate better model performance.
+
+ROC AUC (Receiver Operating Characteristic - Area Under Curve): Represents the model's ability to distinguish between classes across various threshold settings. A higher AUC indicates better discriminative performance.
 7.3 Inference Query for Boosted Tree Model
 
 ```

@@ -61,7 +61,7 @@ destination_project_dataset_table=`gemini_assist_workshop.coingecko_price`
 ### 2. Chat with you code after prompt is done
 ```
 Fix as the following 
-- Add Schedule to interval to every monday,wenesday,friday 21:00 
+- Add Schedule to interval to every hour at 21:00 
 - DAG's owner to `gemini-code-assist`
 ```
 
@@ -120,11 +120,4 @@ Use the GCSToBigQueryOperator to load the transformed CSV file from GCS (process
 
 Task Dependencies:
     Task dependencies: extract_and_upload_to_gcs >> transform_data >> load_to_bigquery.
-```
-
-
-## DAG_2 
-2. Code Completeion for Airflow DAG
-```
-Add task to send LINE notication if the all the upstream task is Done.
 ```

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import logging
 
@@ -15,8 +13,8 @@ log = logging.getLogger(__name__)
 
 with DAG(
     dag_id="coingecko_data_pipeline",
-    schedule=None,
-    start_date=pendulum.datetime(2023, 10, 26, tz="UTC"),
+    schedule="@hourly",
+    start_date=pendulum.datetime(2024, 11, 30, tz="UTC"),
     catchup=False,
     tags=["coingecko", "api", "bigquery"],
 ) as dag:
@@ -52,7 +50,7 @@ with DAG(
         bucket="deb-gemini-code-assist-data-ai-tao-001",
         source_objects=["raw/coingecko/coingecko_price_*.json"], # Wildcard path
         source_format='NEWLINE_DELIMITED_JSON',
-        destination_project_dataset_table="dataai_tao_34.coingecko_price_tao",
+        destination_project_dataset_table="dataai_tao_34.coingecko_price",
         create_disposition="CREATE_IF_NEEDED",
         write_disposition="WRITE_APPEND",
         schema_update_options=["ALLOW_FIELD_ADDITION"],

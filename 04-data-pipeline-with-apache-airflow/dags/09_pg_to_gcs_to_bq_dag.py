@@ -19,8 +19,8 @@ default_args = {
 }
 
 PROJECT_ID = "dataaibootcamp"
-DATASET_ID = "dataai_name_yyyy"
-BUCKET_NAME = "dataai-name-yyyy"
+DATASET_ID = "dataai_tao_34"
+BUCKET_NAME = "deb-gemini-code-assist-data-ai-tao-001"
 
 with DAG(
     "09_pg_to_gcs_to_bq_dag",
@@ -31,7 +31,7 @@ with DAG(
     
     # ดึงข้อมูลจาก Postgres ไป GCS
     postgres_to_gcs = PostgresToGCSOperator(
-        gcp_conn_id="gcp_conn",
+        # gcp_conn_id="gcp_conn",
         task_id="postgres_to_gcs",
         postgres_conn_id="pg_conn",
         sql="SELECT customer_id, name, join_date, loyalty_points FROM postgres.public.customers limit 1000",
@@ -42,7 +42,7 @@ with DAG(
 
     # โหลดข้อมูลจาก GCS เข้า BigQuery
     gcs_to_bigquery = GCSToBigQueryOperator(
-        gcp_conn_id="gcp_conn",
+        # gcp_conn_id="gcp_conn",
         task_id="gcs_to_bigquery",
         bucket=BUCKET_NAME,
         source_objects=["customers/*.parquet"],

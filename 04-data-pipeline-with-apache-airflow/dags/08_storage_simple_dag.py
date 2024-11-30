@@ -17,7 +17,7 @@ default_args = {
 }
 
 PROJECT_ID = "dataaibootcamp"
-BUCKET_NAME = "dataai-name-yyyy"
+BUCKET_NAME = "deb-gemini-code-assist-data-ai-tao-001"
 
 
 # สร้างข้อมูลตัวอย่าง
@@ -44,7 +44,7 @@ with DAG(
 
     # สร้าง Bucket ใน Cloud Storage
     create_bucket = GCSCreateBucketOperator(
-        gcp_conn_id="gcp_conn",
+        # gcp_conn_id="gcp_conn",
         task_id="create_bucket",
         bucket_name=BUCKET_NAME,
         project_id=PROJECT_ID,
@@ -57,7 +57,7 @@ with DAG(
 
     # อัพโหลดไฟล์ไปยัง Cloud Storage
     upload_to_gcs = LocalFilesystemToGCSOperator(
-        gcp_conn_id="gcp_conn",
+        # gcp_conn_id="gcp_conn",
         task_id="upload_to_gcs",
         src="/tmp/products.csv",
         dst="raw/products.csv",

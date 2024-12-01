@@ -45,19 +45,31 @@ Step 7: Run the Tests
 ### 1. Prompt to Create Data Pipeline 
 
 ```
-Create Airflow DAG that contain 2 tasks:
-Objective is to collect data and upload Create/Append to BigQuery Table 
-projec_id=`YOUR_PROJECT_ID`
+Write an Airflow DAG to extract cryptocurrency price data from the CoinGecko API and load it into Google BigQuery. The DAG should:
 
-1. Collect Data from API using PythonOperator
-and Save results in GSC 
-bucket_name=`deb-gemini-code-assist-YOUR_NAME` 
-folder=`raw/coingecko`
-https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether&vs_currencies=usd,thb&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true
+1. **Run hourly** starting from a specific date (e.g., November 30, 2024).
+2. Extract data from the CoinGecko API using the following parameters:
+   - Cryptocurrencies: Bitcoin, Ethereum, Tether.
+   - Currencies: USD and THB.
+   - Include additional metadata such as market cap, 24-hour volume, and last updated time.
+3. Save the API response to Google Cloud Storage (GCS) in JSON format with the following structure:
+   - **Bucket name**: `deb-gemini-code-assist-data-ai-tao-001`.
+   - **Folder**: `raw/coingecko`.
+   - **Filename format**: `coingecko_price_<execution_date>.json` (e.g., `coingecko_price_20241130.json`).
+4. Load the JSON files into a BigQuery table:
+   - **BigQuery table**: `dataai_tao_34.coingecko_price`.
+   - **Configuration**:
+     - Allow schema updates.
+     - Append data to the table.
+     - Use wildcard paths to load all relevant JSON files.
 
-2. Upload data from GSC to BigQuery
-destination_project_dataset_table=`gemini_assist_workshop.coingecko_price`
+Include the following in the response:
+- Necessary imports for Airflow, GCS, and BigQuery integration.
+- Python functions or tasks for API data extraction, uploading to GCS, and loading to BigQuery.
+- Proper operator configuration and task dependencies.
+- Comments explaining each section of the code for clarity.
 ```
+
 ### 2. Chat with you code after prompt is done
 ```
 Fix as the following 

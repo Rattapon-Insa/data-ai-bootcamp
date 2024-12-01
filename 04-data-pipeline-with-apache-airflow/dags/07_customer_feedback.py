@@ -1,12 +1,21 @@
 import logging
 import os
-from airflow import DAG
-from airflow.operators.python import PythonOperator
-from airflow.providers.google.cloud.transfers.gcs_to_bigquery import GCSToBigQueryOperator
-from airflow.providers.google.cloud.hooks.gcs import GCSHook
-import pandas as pd
 from datetime import datetime, timedelta
 from io import StringIO
+
+import pandas as pd
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from airflow.providers.google.cloud.hooks.gcs import GCSHook
+from airflow.providers.google.cloud.transfers.gcs_to_bigquery import (
+    GCSToBigQueryOperator,
+)
+
+# REPLACE_BUCKET_NAME_HERE !!!
+BUCKET_NAME = "deb-gemini-code-assist-data-ai-tao-001"
+
+# REPLACE_DESTINATION_PROJECT_DATASET_TABLE_HERE !!!
+DESTINATION_PROJECT_DATASET_TABLE = "dataai_tao_34.coingecko_price"
 
 # Define default arguments for the DAG
 default_args = {
@@ -40,30 +49,25 @@ with DAG(
         logging.info(f"Files in DAG directory: {os.listdir(dag_path)}")
 
 
-        try:
              # Read JSON data into a Pandas DataFrame
-            df = pd.read_json(full_file_path)
+        df = pd.read_json(full_file_path)
 
-            # Convert DataFrame to CSV
-            csv_data = df.to_csv(index=False)
+        # Convert DataFrame to CSV
+        csv_data = df.to_csv(index=False)
 
-            # Upload CSV data to GCS
-            gcs_hook = GCSHook()
-            gcs_hook.upload(
-                bucket_name=bucket_name,
-                object_name=f'{gcs_folder}/customer_feedback.csv',
-                data=csv_data,
-            )
-
-        except FileNotFoundError:
-            logging.error(f"File not found: {full_file_path}")
-            raise # Re-raise the exception to fail the task
+        # Upload CSV data to GCS
+        gcs_hook = GCSHook()
+        gcs_hook.upload(
+            bucket_name=bucket_name,
+            object_name=f'{gcs_folder}/customer_feedback.csv',
+            data=csv_data,
+        )
 
 
     extract_task = PythonOperator(
         task_id='extract_and_upload_to_gcs',
         python_callable=extract_and_upload_to_gcs,
-        op_kwargs={'bucket_name': 'deb-gemini-code-assist-data-ai-tao-001'},  # Replace with your bucket name
+        op_kwargs={'bucket_name': BUCKET_NAME},  # Replace with your bucket name
     )
 
     # Task 2: Transform data using Pandas
@@ -121,15 +125,15 @@ with DAG(
     transform_task = PythonOperator(
         task_id='transform_data',
         python_callable=transform_data,
-        op_kwargs={'bucket_name': 'deb-gemini-code-assist-data-ai-tao-001'},
+        op_kwargs={'bucket_name': BUCKET_NAME},
     )
 
     # Task 3: Load data from GCS to BigQuery
     load_to_bq_task = GCSToBigQueryOperator(
         task_id='load_to_bigquery',
-        bucket='deb-gemini-code-assist-data-ai-tao-001',  # Replace with your bucket name
+        bucket=BUCKET_NAME,  # Replace with your bucket name
         source_objects=['processed/customer_feedback/transformed_customer_feedback.csv'],
-        destination_project_dataset_table='dataai_tao_34.customer_feedback',
+        destination_project_dataset_table=DESTINATION_PROJECT_DATASET_TABLE,
         project_id='dataaibootcamp',
         write_disposition='WRITE_TRUNCATE',  # Change to 'WRITE_APPEND' if needed
         source_format='CSV',

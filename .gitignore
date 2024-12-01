@@ -173,3 +173,7 @@ backup
 #LINE
 *line_secret.yml
 *vertex_ai_secret.yml
+
+# google-cloud-sdk
+99-setup-gcloud-cli/google-cloud-sdk/
+99-setup-gcloud-cli/google-cloud-cli-linux-x86_64.tar.gz

@@ -27,7 +27,7 @@ Airflow DAG นี้ต้องใช้ **Variables** สำหรับก�
 | `CHANNEL_ACCESS_TOKEN` | ใส่ LINE Channel Access Token ของคุณ       |
 | `LINE_USER_ID`       | ใส่ LINE User ID ที่ต้องการส่งข้อความถึง |
 
-![alt text](../assets/25-10-config-search-agent-gemini-seach-with-answer.png)
+![alt text](../assets/22-example-airflow-variable.png)
 
 ### หรือเพิ่ม Variables ผ่านคำสั่ง CLI
 
